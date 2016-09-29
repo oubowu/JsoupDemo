@@ -18,7 +18,7 @@ import okhttp3.ResponseBody;
 public class FileUtils {
 
     // 保存文件
-    public static File saveFile(ResponseBody response, String mDestFileDir, String mDestFileName) throws IOException {
+    public static File saveFile(ResponseBody response, String destFileDir, String destFileName) throws IOException {
         InputStream is = null;
         byte[] buf = new byte[2048];
         int len = 0;
@@ -36,11 +36,11 @@ public class FileUtils {
 
             long sum = 0;
 
-            File dir = new File(mDestFileDir);
+            File dir = new File(destFileDir);
             if (!dir.exists()) {
                 dir.mkdirs();
             }
-            File file = new File(dir, mDestFileName);
+            File file = new File(dir, destFileName);
             fos = new FileOutputStream(file);
             while ((len = is.read(buf)) != -1) {
                 sum += len;

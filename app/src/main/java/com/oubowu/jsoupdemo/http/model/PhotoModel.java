@@ -1,15 +1,16 @@
 package com.oubowu.jsoupdemo.http.model;
 
-import android.os.Environment;
+import android.os.Looper;
 import android.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import com.oubowu.jsoupdemo.utils.SchedulerTransformer;
+import com.oubowu.jsoupdemo.http.RetrofitManager;
 import com.oubowu.jsoupdemo.http.entity.BuilderPhotoEntity;
 import com.oubowu.jsoupdemo.http.entity.PhotoEntity;
 import com.oubowu.jsoupdemo.http.entity.PhotoZipEntiity;
-import com.oubowu.jsoupdemo.http.RetrofitManager;
 import com.oubowu.jsoupdemo.http.entity.SearchPhotoEntitiy;
 import com.oubowu.jsoupdemo.utils.FileUtils;
 
@@ -25,30 +26,28 @@ import java.util.List;
 
 import okhttp3.ResponseBody;
 import rx.Observable;
-import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
-import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Func1;
-import rx.schedulers.Schedulers;
 
 /**
  * Created by Oubowu on 2016/9/28 0028 16:15.
  */
 public class PhotoModel {
 
-    public static Subscription downloadPhotoZip(final String fileUrl) {
+    public static Subscription downloadPhotoZip(final String fileUrl, final String localPath, final String fileName) {
         return RetrofitManager.getInstance().downloadPhotoZip(fileUrl).map(new Func1<ResponseBody, File>() {
             @Override
             public File call(ResponseBody responseBody) {
                 try {
-                    return FileUtils.saveFile(responseBody, Environment.getExternalStorageDirectory().getAbsolutePath(), "你大爷.zip");
+                    logThreadName();
+                    return FileUtils.saveFile(responseBody, localPath, fileName);
                 } catch (IOException e) {
                     Observable.error(e);
                 }
                 return null;
             }
-        }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(new Subscriber<File>() {
+        }).compose(new SchedulerTransformer<File>()).subscribe(new Subscriber<File>() {
             @Override
             public void onCompleted() {
 
@@ -61,89 +60,101 @@ public class PhotoModel {
 
             @Override
             public void onNext(File file) {
+                logThreadName();
                 Log.e("TAG", "PhotoModel-159行-onNext(): " + file.getName());
             }
         });
     }
 
     public static Subscription getBuilderPhotoList() {
-        return RetrofitManager.getInstance().getBuilderPhotoList().subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new Subscriber<String>() {
-                    @Override
-                    public void onCompleted() {
+        return RetrofitManager.getInstance().getBuilderPhotoList().map(new Func1<String, List<BuilderPhotoEntity>>() {
+            @Override
+            public List<BuilderPhotoEntity> call(String s) {
 
+                Log.e("TAG", "PhotoModel-70行-call(): " + Thread.currentThread().getName() + " ; " + Looper.getMainLooper().getThread().getName());
+
+                final Document document = Jsoup.parse(s);
+
+                final Element sectionRootElement = document.getElementById("image-tabs");
+                // 找到几个tab信息
+                final Elements sectionElements = sectionRootElement.select("a[aria-controls]");
+
+                // 找到tab对应的图片列表
+                final Elements tabContentElements = document.select("div[class=tab-content]");
+
+                Element element;
+                BuilderPhotoEntity entity;
+                Elements urlElements;
+                String section;
+                String sectionName;
+
+                List<BuilderPhotoEntity> photoEntityList = new ArrayList<>();
+
+                for (int i = 0; i < sectionElements.size(); i++) {
+                    element = sectionElements.get(i);
+
+                    section = element.attr("aria-controls");
+                    sectionName = element.text();
+
+                    // 通过section查找元素
+                    urlElements = tabContentElements.select("div#" + section);
+                    // 查出图片列表
+                    urlElements = urlElements.select("img.builder-cover");
+                    for (int j = 0; j < urlElements.size(); j++) {
+                        element = urlElements.get(j);
+                        entity = new BuilderPhotoEntity().setName(element.attr("alt")).setSection(section).setSectionName(sectionName).setUrl(element.attr("src"));
+                        photoEntityList.add(entity);
                     }
+                }
+                return photoEntityList;
+            }
+        }).compose(new SchedulerTransformer<List<BuilderPhotoEntity>>()).subscribe(new Subscriber<List<BuilderPhotoEntity>>() {
+            @Override
+            public void onCompleted() {
 
-                    @Override
-                    public void onError(Throwable e) {
-                        Log.e("TAG", "PhotoModel-39行-onError(): " + e);
-                    }
+            }
 
-                    @Override
-                    public void onNext(String s) {
+            @Override
+            public void onError(Throwable e) {
+                Log.e("TAG", "PhotoModel-39行-onError(): " + e);
+            }
 
-                        final Document document = Jsoup.parse(s);
-
-                        final Element sectionRootElement = document.getElementById("image-tabs");
-                        // 找到几个tab信息
-                        final Elements sectionElements = sectionRootElement.select("a[aria-controls]");
-
-                        // 找到tab对应的图片列表
-                        final Elements tabContentElements = document.select("div[class=tab-content]");
-
-                        Element element;
-                        BuilderPhotoEntity entity;
-                        Elements urlElements;
-                        String section;
-                        String sectionName;
-
-                        List<BuilderPhotoEntity> photoEntityList = new ArrayList<>();
-
-                        for (int i = 0; i < sectionElements.size(); i++) {
-                            element = sectionElements.get(i);
-
-                            section = element.attr("aria-controls");
-                            sectionName = element.text();
-
-                            // 通过section查找元素
-                            urlElements = tabContentElements.select("div#" + section);
-                            // 查出图片列表
-                            urlElements = urlElements.select("img.builder-cover");
-                            for (int j = 0; j < urlElements.size(); j++) {
-                                element = urlElements.get(j);
-                                entity = new BuilderPhotoEntity().setName(element.attr("alt")).setSection(section).setSectionName(sectionName)
-                                        .setUrl(element.attr("src"));
-                                photoEntityList.add(entity);
-                            }
-                        }
-
-                    }
-                });
+            @Override
+            public void onNext(List<BuilderPhotoEntity> list) {
+                //                log(list);
+            }
+        });
     }
 
     public static Subscription searchPhoto(String keywords) {
-        return RetrofitManager.getInstance().searchPhoto(keywords).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new Subscriber<String>() {
-                    @Override
-                    public void onCompleted() {
+        return RetrofitManager.getInstance().searchPhoto(keywords).map(new Func1<String, List<SearchPhotoEntitiy>>() {
+            @Override
+            public List<SearchPhotoEntitiy> call(String s) {
+                try {
+                    final List<SearchPhotoEntitiy> searchPhotoEntity = new Gson().fromJson(s, new TypeToken<List<SearchPhotoEntitiy>>() {
+                    }.getType());
+                    return searchPhotoEntity;
+                } catch (JsonSyntaxException e) {
+                    Observable.error(e);
+                }
+                return null;
+            }
+        }).compose(new SchedulerTransformer<List<SearchPhotoEntitiy>>()).subscribe(new Subscriber<List<SearchPhotoEntitiy>>() {
+            @Override
+            public void onCompleted() {
 
-                    }
+            }
 
-                    @Override
-                    public void onError(Throwable e) {
-                        Log.e("TAG", "PhotoModel-39行-onError(): " + e);
-                    }
+            @Override
+            public void onError(Throwable e) {
+                Log.e("TAG", "PhotoModel-39行-onError(): " + e);
+            }
 
-                    @Override
-                    public void onNext(String s) {
-                        try {
-                            final List<SearchPhotoEntitiy> searchPhotoEntitiys = new Gson().fromJson(s, new TypeToken<List<SearchPhotoEntitiy>>() {
-                            }.getType());
-                        } catch (JsonSyntaxException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                });
+            @Override
+            public void onNext(List<SearchPhotoEntitiy> list) {
+
+            }
+        });
     }
 
     public static Subscription getPhotoList(final int page, boolean isSortHot) {
@@ -154,19 +165,9 @@ public class PhotoModel {
             observable = RetrofitManager.getInstance().getNewPhotoList(page);
         }
 
-        return observable.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(new Observer<String>() {
+        return observable.map(new Func1<String, List<PhotoEntity>>() {
             @Override
-            public void onCompleted() {
-
-            }
-
-            @Override
-            public void onError(Throwable e) {
-                Log.e("TAG", "PhotoModel-125行-onError(): " + e);
-            }
-
-            @Override
-            public void onNext(String s) {
+            public List<PhotoEntity> call(String s) {
 
                 final Document document = Jsoup.parse(s);
 
@@ -233,6 +234,21 @@ public class PhotoModel {
                     photoEntities.add(photoEntity);
 
                 }
+                return photoEntities;
+            }
+        }).compose(new SchedulerTransformer<List<PhotoEntity>>()).subscribe(new Subscriber<List<PhotoEntity>>() {
+            @Override
+            public void onCompleted() {
+
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                Log.e("TAG", "PhotoModel-243行-onError(): " + e);
+            }
+
+            @Override
+            public void onNext(List<PhotoEntity> list) {
 
             }
         });
@@ -243,6 +259,10 @@ public class PhotoModel {
         for (T e : elements) {
             Log.e("TAG", "PhotoModel-100行-log(): " + e.toString());
         }
+    }
+
+    public static void logThreadName(){
+        Log.e("TAG","PhotoModel-262行-logThreadName(): "+Thread.currentThread().getName());
     }
 
 }

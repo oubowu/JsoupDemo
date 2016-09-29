@@ -52,7 +52,7 @@ public class RetrofitManager {
         return mServices.getBuilderPhotoList();
     }
 
-    public Observable<ResponseBody> downloadPhotoZip(@NonNull String fileUrl){
+    public Observable<ResponseBody> downloadPhotoZip(@NonNull String fileUrl) {
         return mServices.downloadPhotoZip(fileUrl);
     }
 
